@@ -10,6 +10,7 @@ fn main() {
         println!("Listening on 127.0.0.1:8000");
         for streams in listener.incoming(){
             let mut stream=streams.unwrap();
+            let mut stream_writer = stream.try_clone().unwrap();
             println!("Connection Established");
             std::thread::spawn(move || {
                 let mut reader = BufReader::new(stream);
@@ -30,14 +31,44 @@ fn main() {
                     }
                 }
             });
+            std::thread::spawn(move || {
+                loop {
+                    let mut input = String::new();
+                    io::stdin().read_line(&mut input).unwrap();
+                    let response = input.trim();
+                    stream_writer.write_all(response.as_bytes()).unwrap();
+                    stream_writer.write_all(b"\n").unwrap();
+                }
+            });
         }
 
 
     }
     else if a=="Connect"{
-        let mut stream= TcpStream::connect("127.0.0.1:8000").unwrap();
-        println!("Connected to 127.0.0.1:8000");
-        println!("Type messages to send. Type 'Exit' to quit.");
+         let mut stream = TcpStream::connect("127.0.0.1:8000").unwrap();
+    println!("Connected to 127.0.0.1:8000");
+
+    // Clone the stream for the read thread
+    let stream_clone = stream.try_clone().unwrap();
+    std::thread::spawn(move || {
+        let mut reader = BufReader::new(stream_clone);
+        loop {
+            let mut line = String::new();
+            match reader.read_line(&mut line) {
+                Ok(0) => {
+                    println!("Server disconnected.");
+                    break;
+                }
+                Ok(_) => {
+                    println!("Received: {}", line.trim());
+                }
+                Err(e) => {
+                    eprintln!("Error reading from server: {}", e);
+                    break;
+                }
+            }
+        }
+    });
         loop{
             let mut input=String::new();
             io::stdin().read_line(&mut input).unwrap();
